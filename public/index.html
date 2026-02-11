@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>EMS | Panel Pracownika</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #050505; color: #fff; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .card { background: rgba(20, 20, 20, 0.8); border: 1px solid rgba(255,255,255,0.05); transition: 0.3s; backdrop-filter: blur(10px); }
+        .card:hover { border-color: #dc2626; transform: translateY(-3px); box-shadow: 0 10px 30px rgba(220, 38, 38, 0.1); }
+        .section-divider { display: flex; align-items: center; margin: 40px 0 20px 0; }
+        .section-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(220, 38, 38, 0.5), transparent); margin-left: 20px; }
+        .action-tile { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); transition: 0.3s; }
+        .action-tile:hover { background: rgba(255, 255, 255, 0.08); border-color: #dc2626; transform: translateY(-2px); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #dc2626; }
+        .sidebar-right {
+            position: fixed; right: 0; top: 0; height: 100vh; width: 250px;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+            display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+            padding-right: 40px; z-index: 40; border-left: 1px solid rgba(255,255,255,0.05);
+        }
+        .sidebar-item {
+            font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;
+            margin: 15px 0; color: rgba(255,255,255,0.4); cursor: pointer; transition: 0.3s;
+        }
+        .sidebar-item:hover, .sidebar-item.active { color: #fff; transform: translateX(-5px); }
+        #denied-overlay { display: none; }
+
+        /* Toast notification */
+        .toast {
+            position: fixed; bottom: 30px; right: 30px; z-index: 9999;
+            padding: 16px 24px; border-radius: 12px; font-size: 13px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px;
+            transform: translateX(200%); transition: transform 0.4s ease;
+            max-width: 360px;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #064e3b; border: 1px solid #10b981; color: #6ee7b7; }
+        .toast.error   { background: #450a0a; border: 1px solid #dc2626; color: #fca5a5; }
+        .toast.info    { background: #0c1a4e; border: 1px solid #3b82f6; color: #93c5fd; }
+
+        /* Wskaźnik poziomu ról */
+        .role-pip { width: 10px; height: 10px; border-radius: 50%; border: 1px solid; transition: 0.3s; }
+        .role-pip.filled-plus  { background: #22c55e; border-color: #16a34a; }
+        .role-pip.filled-minus { background: #dc2626; border-color: #b91c1c; }
+        .role-pip.empty        { background: transparent; border-color: rgba(255,255,255,0.15); }
+
+        /* Shimmer na karcie previewu */
+        @keyframes shimmer { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .shimmer { animation: shimmer 1.5s infinite; }
+
+        /* Multi-select styling */
+        .member-checkbox {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .member-checkbox:checked {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+        .member-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .selected-member-pill {
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid #dc2626;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 4px;
+        }
+        .selected-member-pill .remove-btn {
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .selected-member-pill .remove-btn:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="p-6 md:p-12 pr-[280px]">
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <div class="sidebar-right hidden md:flex">
+        <div onclick="switchTab('struktura')" id="side-struktura" class="sidebar-item active">Główna</div>
+        <div onclick="switchTab('panel')" id="side-panel" class="sidebar-item">Panel Pracownika</div>
+    </div>
+
+    <!-- Overlay odmowy dostępu -->
+    <div id="denied-overlay" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center">
+        <div class="border-2 border-red-600 bg-black p-10 text-center rounded-lg shadow-[0_0_50px_rgba(220,38,38,0.3)]">
+            <h2 class="text-red-600 text-3xl font-black uppercase italic mb-2">Odmowa dostępu</h2>
+            <p class="text-white/60 uppercase text-[10px] tracking-widest font-bold mb-8">Brak uprawnień jednostki M.I.A</p>
+            <button onclick="document.getElementById('denied-overlay').style.display='none'" class="border border-white/20 px-6 py-2 text-[10px] uppercase font-bold text-white hover:bg-white hover:text-black transition">Zamknij</button>
+        </div>
+    </div>
+
+    <!-- Modal - profil członka -->
+    <div id="member-modal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+        <div class="bg-[#0a0a0a] border border-white/10 w-full max-w-4xl rounded-2xl overflow-hidden relative shadow-[0_0_50px_rgba(0,0,0,1)]">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-white/50 hover:text-white text-2xl z-10">&times;</button>
+            <div class="flex flex-col md:flex-row h-full">
+                <div class="w-full md:w-1/3 border-r border-white/5 p-8 flex flex-col items-center text-center bg-gradient-to-b from-blue-600/5 to-transparent">
+                    <div id="modal-rank-top" class="bg-blue-600 text-[10px] font-black px-6 py-1 skew-x-[-20deg] mb-8 uppercase tracking-widest text-black">ŁADOWANIE...</div>
+                    <div class="relative mb-6">
+                        <img id="modal-avatar" src="" class="w-44 h-44 rounded-full border-4 border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.15)] object-cover">
+                    </div>
+                    <h2 id="modal-name" class="text-2xl font-black italic tracking-tighter mb-8 uppercase text-white"></h2>
+                    <div class="grid grid-cols-2 gap-4 w-full">
+                        <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                            <p class="text-[8px] text-gray-500 font-bold uppercase mb-2">Plusy</p>
+                            <div id="modal-plusy" class="flex justify-center gap-1"></div>
+                        </div>
+                        <div class="bg-white/5 p-3 rounded-xl border border-white/5">
+                            <p class="text-[8px] text-gray-500 font-bold uppercase mb-2">Minusy</p>
+                            <div id="modal-minusy" class="flex justify-center gap-1"></div>
+                        </div>
+                    </div>
+                    <div id="modal-penalty" class="mt-6 w-full"></div>
+                </div>
+                <div class="w-full md:w-2/3 p-10 overflow-y-auto max-h-[85vh] bg-[#0c0c0c]">
+                    <section class="mb-12">
+                        <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-white/30 mb-8 italic border-b border-white/5 pb-2">Szkolenia Kwalifikacyjne</h3>
+                        <div id="modal-szkolenia" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    </section>
+                    <section>
+                        <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-white/30 mb-8 italic border-b border-white/5 pb-2">Przydziały / Jednostki</h3>
+                        <div id="modal-jednostki" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal - raport operacyjny -->
+    <div id="report-modal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-xl z-[60] flex items-center justify-center p-4">
+        <div class="bg-[#0a0a0a] border border-blue-500/30 w-full max-w-2xl rounded-2xl p-8 relative shadow-[0_0_50px_rgba(59,130,246,0.2)]">
+            <button onclick="closeReportModal()" class="absolute top-4 right-4 text-white/50 hover:text-white text-2xl">&times;</button>
+            <h2 class="text-white text-3xl font-black uppercase italic mb-8 text-center tracking-tighter">Nowy Raport Operacyjny</h2>
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Typ Operacji</label>
+                    <select id="report-type" class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500 transition">
+                        <option value="Patrol">Patrol Standardowy</option>
+                        <option value="Operacja">Operacja Chirurgiczna</option>
+                        <option value="Wezwanie">Wezwanie Specjalne</option>
+                        <option value="Zabezpieczenie">Zabezpieczenie Medyczne</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Przebieg Operacji / Służby</label>
+                    <textarea id="report-desc" placeholder="Opisz szczegółowo przebieg działań..." class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white h-40 outline-none focus:border-blue-500 transition resize-none"></textarea>
+                </div>
+                <button onclick="sendReport()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl uppercase tracking-widest transition-all">Wyślij Raport</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal - urlopy -->
+    <div id="holiday-modal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-xl z-[60] flex items-center justify-center p-4">
+        <div class="bg-[#111] border border-white/10 w-full max-w-md rounded-2xl p-8 relative shadow-2xl">
+            <button onclick="closeHolidayModal()" class="absolute top-4 right-4 text-white/50 hover:text-white text-2xl">&times;</button>
+            <h2 class="text-blue-400 text-xl font-black uppercase text-center mb-8 tracking-widest">System Zarządzania Urlopem</h2>
+            <div class="space-y-4">
+                <div class="bg-white/5 p-4 rounded-lg border-l-4 border-blue-500">
+                    <p class="text-[10px] text-gray-500 uppercase font-bold">Funkcjonariusz</p>
+                    <p id="holiday-user-name" class="text-white font-black uppercase italic"></p>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase">Data zakończenia</label>
+                    <input type="date" id="holiday-date" class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase">Powód urlopu</label>
+                    <textarea id="holiday-reason" placeholder="Opisz powód..." class="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white h-24 outline-none focus:border-blue-500 resize-none"></textarea>
+                </div>
+                <button onclick="submitHoliday()" class="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 rounded-lg uppercase text-xs transition-all">Zatwierdź i wyślij logi</button>
+                <button onclick="closeHolidayModal()" class="w-full bg-transparent border border-red-500/50 text-red-500 font-bold py-3 rounded-lg uppercase text-[10px] hover:bg-red-500/10 transition-all">Zakończ mój urlop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal - Wezwanie do biura (STARY - zostawiam dla kompatybilności) -->
+    <div id="wezwanie-modal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-xl z-[60] flex items-center justify-center p-4">
+        <div class="bg-[#0a0a0a] border border-orange-500/30 w-full max-w-2xl rounded-2xl p-8 relative shadow-[0_0_50px_rgba(245,158,11,0.2)]">
+            <button onclick="closeWezwanieModal()" class="absolute top-4 right-4 text-white/50 hover:text-white text-2xl">&times;</button>
+            <h2 class="text-orange-400 text-3xl font-black uppercase italic mb-8 text-center tracking-tighter">Wezwanie do Biura</h2>
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Wezwana osoba</label>
+                    <select id="wezwanie-target" class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-orange-500 transition">
+                        <option value="">Wybierz funkcjonariusza...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Powód wezwania</label>
+                    <textarea id="wezwanie-reason" placeholder="Opisz powód wezwania..." class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white h-32 outline-none focus:border-orange-500 transition resize-none"></textarea>
+                </div>
+                <button onclick="sendWezwanie()" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-black py-4 rounded-xl uppercase tracking-widest transition-all">Wyślij Wezwanie</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal - Panel MIA (zarządzanie personelem) -->
+    <div id="mia-modal" class="hidden fixed inset-0 bg-black/95 backdrop-blur-xl z-[60] flex items-center justify-center p-4">
+        <div class="bg-[#0a0a0a] border border-red-600/30 w-full max-w-5xl rounded-2xl overflow-hidden relative shadow-[0_0_50px_rgba(220,38,38,0.15)] max-h-[90vh] overflow-y-auto">
+            <button onclick="closeMIAModal()" class="absolute top-4 right-4 text-white/50 hover:text-white text-2xl z-10">&times;</button>
+
+            <div class="p-8 border-b border-white/5 flex items-center gap-4 sticky top-0 bg-[#0a0a0a] z-10">
+                <div class="bg-red-600 w-1.5 h-10 rounded-full"></div>
+                <div>
+                    <h2 class="text-white text-2xl font-black uppercase italic tracking-tighter">System MIA</h2>
+                    <p class="text-[10px] text-red-500/60 uppercase font-bold tracking-widest">Zarządzanie Personelem EMS</p>
+                </div>
+            </div>
+
+            <div class="p-8 space-y-6">
+
+                <!-- Wybór funkcjonariuszy (multi-select) -->
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1 mb-2 block">
+                        Funkcjonariusze 
+                        <span class="text-red-400 ml-2">(Zaznacz jedną lub więcej osób)</span>
+                    </label>
+                    
+                    <!-- Wybrani funkcjonariusze -->
+                    <div id="selected-members-display" class="mb-4 p-4 bg-white/3 border border-white/8 rounded-xl min-h-[60px] flex flex-wrap items-center gap-2"></div>
+
+                    <!-- Lista do wyboru -->
+                    <div class="bg-white/5 border border-white/10 rounded-xl p-4 max-h-[300px] overflow-y-auto">
+                        <div id="members-checklist" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Typ wpisu -->
+                    <div>
+                        <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Typ Wpisu</label>
+                        <select id="action-type" onchange="onActionTypeChange()" class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-red-600 transition mt-2">
+                            <option value="plus">➕ Plus (+)</option>
+                            <option value="pochwala">🏅 Pochwała</option>
+                            <option value="minus">➖ Minus (-)</option>
+                            <option value="upomnienie">⚠️ Upomnienie</option>
+                            <option value="nagana">🔴 Nagana</option>
+                            <option value="zawieszenie">🚫 Zawieszenie</option>
+                            <option value="wezwanie">📢 Wezwanie do Biura</option>
+                        </select>
+                    </div>
+
+                    <!-- Info o tym co zostanie nadane -->
+                    <div id="action-preview" class="hidden">
+                        <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Akcja</label>
+                        <div id="action-preview-box" class="mt-2 bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
+                            <span id="action-preview-icon" class="text-xl"></span>
+                            <div>
+                                <p id="action-preview-label" class="text-white text-xs font-black uppercase"></p>
+                                <p id="action-preview-sub" class="text-[9px] text-gray-500 font-bold mt-0.5"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Uzasadnienie -->
+                <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-widest ml-1">Uzasadnienie</label>
+                    <textarea id="action-reason" placeholder="Podaj szczegółowy powód decyzji..." class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white h-32 outline-none focus:border-red-600 transition resize-none mt-2"></textarea>
+                </div>
+
+                <!-- Przycisk -->
+                <button id="mia-submit-btn" onclick="sendMIAAction()" class="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-red-900/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                    Zatwierdź wpis w systemie
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="max-w-7xl mx-auto flex justify-between items-center mb-12">
+        <div class="flex items-center gap-4">
+            <div class="bg-red-600 p-2 rounded font-black text-xl italic">MIA</div>
+            <div>
+                <h1 class="text-xl font-black uppercase tracking-tighter">Medical Intelligence Agency</h1>
+                <p class="text-[10px] text-gray-500 uppercase tracking-widest">Emergency Medical Services</p>
+            </div>
+        </div>
+        <div id="auth-panel"></div>
+    </header>
+
+    <!-- Main -->
+    <main class="max-w-7xl mx-auto">
+        <!-- Struktura -->
+        <div id="ems-list-section" class="space-y-4">
+            <div id="ems-list" class="space-y-4">
+                <div class="text-center py-20 text-gray-600 animate-pulse uppercase font-black tracking-widest shimmer">Inicjalizacja systemu...</div>
+            </div>
+        </div>
+
+        <!-- Panel funkcjonariusza -->
+        <div id="panel-view" class="hidden min-h-[60vh] flex flex-col items-center justify-center">
+
+            <div id="panel-gate-locked" class="text-center">
+                <h2 class="text-white text-2xl font-black uppercase tracking-widest mb-6 italic">Panel Pracownika</h2>
+                <p class="text-white/40 text-[10px] uppercase tracking-widest mb-8">Musisz się zalogować, aby uzyskać dostęp do narzędzi</p>
+                <a href="/login" class="bg-red-600 hover:bg-red-700 text-white font-black text-xs px-10 py-4 rounded-xl uppercase transition-all shadow-[0_0_20px_rgba(220,38,38,0.2)]">Zaloguj przez Discord</a>
+            </div>
+
+            <div id="panel-gate-unlocked" class="hidden w-full flex flex-col items-center">
+                <h2 class="text-white text-4xl font-black uppercase tracking-widest mb-12 italic text-center">Panel Pracownika</h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl">
+
+                    <div onclick="openReportModal()" class="action-tile p-10 rounded-3xl text-center cursor-pointer flex flex-col items-center justify-center gap-4 border border-white/5 bg-white/5">
+                        <span class="text-4xl">📝</span>
+                        <h3 class="text-xs font-black uppercase tracking-[0.2em]">Nowy Raport</h3>
+                    </div>
+
+                    <div onclick="checkAndOpenMIA()" id="mia-action-tile" class="action-tile p-10 rounded-3xl text-center cursor-pointer flex flex-col items-center justify-center gap-4 border border-blue-500/20 bg-blue-500/5">
+                        <span class="text-4xl">⚖️</span>
+                        <h3 class="text-xs font-black uppercase tracking-[0.2em]">System MIA</h3>
+                    </div>
+
+                    <div onclick="openHolidayModal()" class="action-tile p-10 rounded-3xl text-center cursor-pointer flex flex-col items-center justify-center gap-4 border border-white/5 bg-white/5">
+                        <span class="text-4xl">📅</span>
+                        <h3 class="text-xs font-black uppercase tracking-[0.2em]">Zarządzanie Urlopami</h3>
+                    </div>
+
+                    <div id="admin-action-tile" class="hidden col-span-full action-tile p-6 rounded-2xl text-center cursor-pointer flex items-center justify-center gap-4 border border-red-500/20 bg-red-500/5">
+                        <span class="text-2xl">👮</span>
+                        <h3 class="text-xs font-black uppercase tracking-[0.2em] text-red-500">High Command</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const MIA_ROLE_ID = '1361684141984321556';
+        let currentUser = null;
+        let allMembersData = [];
+        let selectedMemberIds = new Set(); // Przechowuje ID wybranych członków
+
+        const STOPNIE_IDS = ['1361682698963259522','1361682855645675720','1361682877062058044','1361682883479339309','1401685899158491136','1361685410186526932','1361685419204542689','1388915799288320154','1361685425072242860','1361685459243237518','1361685464058302585','1361685471792595245','1361686250335113463','1361686238821744640','1361686264302141440', '1361686256999989500'];
+        const rankDetails = {
+            '1361682698963259522': { order: 1, label: 'Dyrektor Szpitala' },
+            '1361682855645675720': { order: 2, label: 'Z-ca Dyrektor' },
+            '1361682877062058044': { order: 3, label: 'Ordynator' },
+            '1361682883479339309': { order: 4, label: 'Z-ca Ordynatora' },
+            '1361685410186526932': { order: 5, label: 'Profesor' },
+            '1361685419204542689': { order: 6, label: 'Doktor' },
+            '1388915799288320156': { order: 7, label: 'Lekarz Specjalista' },
+            '1361685425072242860': { order: 8, label: 'Lekarz Rezydent' },
+            '1361685459243237518': { order: 9, label: 'Lekarz Stażysta' },
+            '1361685464058302585': { order: 10, label: 'Starszy Ratownik' },
+            '1361685471792595245': { order: 11, label: 'Ratownik Medyczny' },
+            '1361686250335113463': { order: 12, label: 'Młodszy Ratownik' },
+            '1361686238821744640': { order: 13, label: 'Pielęgniarz' },
+            '1361686264302141440': { order: 14, label: 'Stażysta' },
+            '1361686256999989500': { order: 15, label: 'Praktykant' },
+        };
+
+        // Role progresywne (muszą być takie same jak w server.js)
+        const ROLE_PROG = {
+            plus:  ['1361688150040248370','1361688142880440330','1361688136429600989'],
+            minus: ['1361688178595201064','1361688172802605218','1361688165093736528']
+        };
+
+        // ─── TOAST ───────────────────────────────────────────────────────────────
+        function showToast(msg, type = 'info') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast ${type} show`;
+            setTimeout(() => { t.classList.remove('show'); }, 3500);
+        }
+
+        // ─── TABY ────────────────────────────────────────────────────────────────
+        function switchTab(tab) {
+            const listSection = document.getElementById('ems-list-section');
+            const panelSection = document.getElementById('panel-view');
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+
+            if (tab === 'struktura') {
+                listSection.classList.remove('hidden');
+                panelSection.classList.add('hidden');
+                document.getElementById('side-struktura').classList.add('active');
+            } else if (tab === 'panel') {
+                listSection.classList.add('hidden');
+                panelSection.classList.remove('hidden');
+                panelSection.classList.add('flex');
+                document.getElementById('side-panel').classList.add('active');
+            }
+        }
+
+        // ─── START ───────────────────────────────────────────────────────────────
+        async function start() {
+            try {
+                const mRes = await fetch('/api/ems-members');
+                allMembersData = await mRes.json();
+                renderFullList(allMembersData);
+
+                const uRes = await fetch('/api/user');
+                currentUser = await uRes.json();
+
+                if (currentUser && currentUser.id) {
+                    renderAuthPanel();
+                    document.getElementById('panel-gate-locked').classList.add('hidden');
+                    document.getElementById('panel-gate-unlocked').classList.remove('hidden');
+
+                    if (currentUser.isZarzad) {
+                        document.getElementById('admin-action-tile').classList.remove('hidden');
+                    }
+                } else {
+                    document.getElementById('auth-panel').innerHTML = `<a href="/login" class="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] px-6 py-3 rounded-lg uppercase transition">Zaloguj przez Discord</a>`;
+                }
+            } catch (e) {
+                console.error("Błąd inicjalizacji:", e);
+            }
+        }
+
+        function renderAuthPanel() {
+            const avatarUrl = currentUser.avatar
+                ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png`
+                : 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+            document.getElementById('auth-panel').innerHTML = `
+                <div class="flex items-center gap-3 bg-white/5 p-2 pr-4 rounded-xl border border-white/10">
+                    <img src="${avatarUrl}" class="w-10 h-10 rounded-lg border border-white/10">
+                    <div class="text-left">
+                        <p class="text-[10px] font-black text-white uppercase italic leading-none">${currentUser.global_name || currentUser.username}</p>
+                        <p class="text-[8px] text-gray-500 font-bold uppercase mt-1">Status: Online</p>
+                    </div>
+                    <a href="/logout" class="ml-2 text-[8px] text-red-500/50 hover:text-red-400 uppercase font-bold">Wyloguj</a>
+                </div>`;
+        }
+
+        // ─── SPRAWDZENIE I OTWARCIE PANELU MIA ───────────────────────────────────
+        function checkAndOpenMIA() {
+            if (!currentUser) {
+                showToast('Musisz być zalogowany!', 'error');
+                return;
+            }
+
+            let hasMIA = currentUser.isMIA;
+
+            if (!hasMIA && currentUser.allRoles) {
+                hasMIA = currentUser.allRoles.some(r => (r.id || r) === MIA_ROLE_ID);
+            }
+            if (!hasMIA && allMembersData.length > 0) {
+                const me = allMembersData.find(m => m.id === currentUser.id);
+                if (me) hasMIA = me.allRoles.some(r => r.id === MIA_ROLE_ID);
+            }
+
+            if (hasMIA) {
+                openMIAModal();
+            } else {
+                document.getElementById('denied-overlay').style.display = 'flex';
+            }
+        }
+
+        // ─── PANEL MIA ───────────────────────────────────────────────────────────
+        function openMIAModal() {
+            selectedMemberIds.clear();
+            loadMembersChecklist();
+            updateSelectedMembersDisplay();
+            document.getElementById('action-preview').classList.add('hidden');
+            document.getElementById('action-reason').value = '';
+            document.getElementById('action-type').value = 'plus';
+            document.getElementById('mia-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMIAModal() {
+            document.getElementById('mia-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        function loadMembersChecklist() {
+            const container = document.getElementById('members-checklist');
+            const sorted = [...allMembersData].sort((a, b) => a.username.localeCompare(b.username));
+            
+            container.innerHTML = sorted.map(m => `
+                <label class="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 cursor-pointer transition">
+                    <input type="checkbox" 
+                           class="member-checkbox" 
+                           value="${m.id}" 
+                           onchange="toggleMemberSelection('${m.id}')">
+                    <img src="${m.avatar}" class="w-8 h-8 rounded-lg border border-white/10">
+                    <span class="text-white text-sm font-bold">${m.username}</span>
+                </label>
+            `).join('');
+        }
+
+        function toggleMemberSelection(memberId) {
+            if (selectedMemberIds.has(memberId)) {
+                selectedMemberIds.delete(memberId);
+            } else {
+                selectedMemberIds.add(memberId);
+            }
+            updateSelectedMembersDisplay();
+            onActionTypeChange();
+        }
+
+        function updateSelectedMembersDisplay() {
+            const display = document.getElementById('selected-members-display');
+            
+            if (selectedMemberIds.size === 0) {
+                display.innerHTML = '<p class="text-gray-500 text-xs italic">Nie wybrano żadnego funkcjonariusza</p>';
+                return;
+            }
+
+            const pills = Array.from(selectedMemberIds).map(id => {
+                const member = allMembersData.find(m => m.id === id);
+                if (!member) return '';
+                
+                return `
+                    <div class="selected-member-pill">
+                        <img src="${member.avatar}" class="w-5 h-5 rounded-full">
+                        <span>${member.username}</span>
+                        <span class="remove-btn" onclick="toggleMemberSelection('${id}'); event.stopPropagation();">×</span>
+                    </div>
+                `;
+            }).join('');
+
+            display.innerHTML = pills;
+        }
+
+        function getLevel(roles, progression) {
+            let level = 0;
+            for (let i = progression.length - 1; i >= 0; i--) {
+                if (roles.some(r => r.id === progression[i])) {
+                    level = i + 1;
+                    break;
+                }
+            }
+            return level;
+        }
+
+        function onActionTypeChange() {
+            const type = document.getElementById('action-type').value;
+            const previewDiv = document.getElementById('action-preview');
+
+            if (selectedMemberIds.size === 0) {
+                previewDiv.classList.add('hidden');
+                return;
+            }
+
+            let icon = '⚙️', label = '', sub = '';
+
+            if (type === 'plus') {
+                icon = '➕'; 
+                label = 'Nadanie: Plus'; 
+                sub = `Dla ${selectedMemberIds.size} osób (progresja automatyczna)`;
+            } else if (type === 'minus') {
+                icon = '➖'; 
+                label = 'Nadanie: Minus'; 
+                sub = `Dla ${selectedMemberIds.size} osób (progresja automatyczna)`;
+            } else if (type === 'nagana') {
+                icon = '🔴'; 
+                label = 'Nadanie Nagany'; 
+                sub = `Dla ${selectedMemberIds.size} osób`;
+            } else if (type === 'upomnienie') {
+                icon = '⚠️'; 
+                label = 'Nadanie Upomnienia'; 
+                sub = `Dla ${selectedMemberIds.size} osób`;
+            } else if (type === 'zawieszenie') {
+                icon = '🚫'; 
+                label = 'Zawieszenie funkcjonariuszy'; 
+                sub = `${selectedMemberIds.size} osób zostanie zawieszonych`;
+            } else if (type === 'pochwala') {
+                icon = '🏅'; 
+                label = 'Wystawienie Pochwały'; 
+                sub = `Dla ${selectedMemberIds.size} osób`;
+            } else if (type === 'wezwanie') {
+                icon = '📢'; 
+                label = 'Wezwanie do Biura'; 
+                sub = `${selectedMemberIds.size} osób zostanie wezwanych`;
+            }
+
+            document.getElementById('action-preview-icon').textContent = icon;
+            document.getElementById('action-preview-label').textContent = label;
+            document.getElementById('action-preview-sub').textContent = sub;
+            previewDiv.classList.remove('hidden');
+        }
+
+        // ─── WYŚLIJ AKCJĘ MIA ────────────────────────────────────────────────────
+        async function sendMIAAction() {
+            const targetIds = Array.from(selectedMemberIds);
+            const type = document.getElementById('action-type').value;
+            const reason = document.getElementById('action-reason').value.trim();
+
+            if (targetIds.length === 0) { 
+                showToast('Wybierz przynajmniej jednego funkcjonariusza!', 'error'); 
+                return; 
+            }
+            if (!reason) { 
+                showToast('Podaj uzasadnienie!', 'error'); 
+                return; 
+            }
+
+            const btn = document.getElementById('mia-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Wysyłanie...';
+
+            try {
+                const res = await fetch('/api/mia-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetIds, type, reason })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast(`✓ ${data.message}`, 'success');
+                    if (data.errors && data.errors.length > 0) {
+                        console.warn('Błędy podczas przetwarzania:', data.errors);
+                    }
+                    document.getElementById('action-reason').value = '';
+                    selectedMemberIds.clear();
+                    
+                    // Odśwież checkboxy
+                    document.querySelectorAll('.member-checkbox').forEach(cb => cb.checked = false);
+                    updateSelectedMembersDisplay();
+                    document.getElementById('action-preview').classList.add('hidden');
+
+                    // Odśwież dane
+                    const mRes = await fetch('/api/ems-members');
+                    allMembersData = await mRes.json();
+                } else {
+                    showToast(`Błąd: ${data.error}`, 'error');
+                    if (data.errors) {
+                        data.errors.forEach(err => console.error(err));
+                    }
+                }
+            } catch (err) {
+                showToast('Błąd połączenia z serwerem!', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Zatwierdź wpis w systemie';
+            }
+        }
+
+        // ─── WEZWANIE DO BIURA (STARY MODAL) ─────────────────────────────────────
+        function openWezwanieModal() {
+            const select = document.getElementById('wezwanie-target');
+            const sorted = [...allMembersData].sort((a, b) => a.username.localeCompare(b.username));
+            select.innerHTML = '<option value="">Wybierz funkcjonariusza...</option>' +
+                sorted.map(m => `<option value="${m.id}">${m.username}</option>`).join('');
+            
+            document.getElementById('wezwanie-reason').value = '';
+            document.getElementById('wezwanie-modal').classList.remove('hidden');
+        }
+
+        function closeWezwanieModal() {
+            document.getElementById('wezwanie-modal').classList.add('hidden');
+        }
+
+        async function sendWezwanie() {
+            const targetId = document.getElementById('wezwanie-target').value;
+            const reason = document.getElementById('wezwanie-reason').value.trim();
+
+            if (!targetId) { showToast('Wybierz funkcjonariusza!', 'error'); return; }
+            if (!reason) { showToast('Podaj powód wezwania!', 'error'); return; }
+
+            try {
+                const res = await fetch('/api/wezwanie', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetId, reason })
+                });
+
+                if (res.ok) {
+                    showToast('Wezwanie wysłane pomyślnie!', 'success');
+                    closeWezwanieModal();
+                } else {
+                    showToast('Błąd wysyłania wezwania.', 'error');
+                }
+            } catch {
+                showToast('Błąd połączenia!', 'error');
+            }
+        }
+
+        // ─── RAPORT ──────────────────────────────────────────────────────────────
+        function openReportModal()  { document.getElementById('report-modal').classList.remove('hidden'); }
+        function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
+
+        async function sendReport() {
+            const type = document.getElementById('report-type').value;
+            const desc = document.getElementById('report-desc').value.trim();
+
+            if (!desc) { showToast('Opisz przebieg operacji!', 'error'); return; }
+
+            try {
+                const res = await fetch('/api/send-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, description: desc })
+                });
+
+                if (res.ok) {
+                    showToast('Raport wysłany pomyślnie!', 'success');
+                    document.getElementById('report-desc').value = '';
+                    closeReportModal();
+                } else {
+                    showToast('Błąd wysyłania raportu.', 'error');
+                }
+            } catch {
+                showToast('Błąd połączenia!', 'error');
+            }
+        }
+
+        // ─── URLOPY ──────────────────────────────────────────────────────────────
+        function openHolidayModal() {
+            if (currentUser) document.getElementById('holiday-user-name').innerText = currentUser.username;
+            document.getElementById('holiday-modal').classList.remove('hidden');
+        }
+        function closeHolidayModal() { document.getElementById('holiday-modal').classList.add('hidden'); }
+
+        async function submitHoliday() {
+            const endDate = document.getElementById('holiday-date').value;
+            const reason  = document.getElementById('holiday-reason').value.trim();
+
+            if (!reason) { showToast('Podaj powód urlopu!', 'error'); return; }
+
+            try {
+                const res = await fetch('/api/holiday', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endDate, reason })
+                });
+
+                if (res.ok) {
+                    showToast('Urlop zgłoszony!', 'success');
+                    closeHolidayModal();
+                } else {
+                    showToast('Błąd zgłaszania urlopu.', 'error');
+                }
+            } catch {
+                showToast('Błąd połączenia!', 'error');
+            }
+        }
+
+        // ─── LISTA STRUKTURY ────────────────────────────────────────────────────
+        function renderFullList(members) {
+            const list = document.getElementById('ems-list');
+            list.innerHTML = '';
+            const grouped = {};
+
+            members.forEach(m => {
+                const rankId = STOPNIE_IDS.find(id => m.allRoles.some(r => r.id === id)) || 'unknown';
+                if (!grouped[rankId]) grouped[rankId] = [];
+                grouped[rankId].push(m);
+            });
+
+            Object.keys(grouped)
+                .sort((a, b) => (rankDetails[a]?.order || 999) - (rankDetails[b]?.order || 999))
+                .forEach(rankId => {
+                    const groupMembers = grouped[rankId];
+                    const detail = rankDetails[rankId] || { label: 'Pozostali', order: 999 };
+                    const isHighRank = detail.order <= 4;
+
+                    let html = `<div class="section-divider"><span class="text-[13px] font-black uppercase tracking-[0.5em] ${isHighRank ? 'text-blue-500' : 'text-gray-400'} italic">${detail.label}</span></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">`;
+
+                    groupMembers.forEach(m => {
+                        const cleanRank = (m.rank || detail.label).replace(/🚑|⁝/g, '').trim();
+                        const isZawieszony = m.allRoles.some(r => r.id === '1466957208917905665');
+                        html += `
+                        <div onclick="openMemberModal('${m.id}')" class="card p-5 rounded-2xl relative cursor-pointer group ${isZawieszony ? 'opacity-40 grayscale' : ''}">
+                            <div class="flex items-center gap-4">
+                                <img src="${m.avatar}" class="w-14 h-14 rounded-xl border border-white/10 object-cover shadow-2xl">
+                                <div class="overflow-hidden">
+                                    <h3 class="font-black text-sm uppercase truncate text-white italic tracking-tighter">${m.username}</h3>
+                                    <p class="text-[9px] ${isHighRank ? 'text-blue-400' : 'text-red-600'} font-bold italic truncate uppercase tracking-widest">${cleanRank}</p>
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+
+                    list.innerHTML += html + '</div>';
+                });
+        }
+
+        // ─── MODAL PROFILU ───────────────────────────────────────────────────────
+        function openMemberModal(memberId) {
+            const m = allMembersData.find(m => m.id === memberId);
+            if (!m) return;
+            const roles = m.allRoles || [];
+
+            const stopienRola = roles.find(r => STOPNIE_IDS.includes(r.id));
+            document.getElementById('modal-rank-top').innerText = (stopienRola ? stopienRola.name : "EMS").replace(/🚑|⁝/g, '').trim().toUpperCase();
+            document.getElementById('modal-avatar').src = m.avatar;
+            document.getElementById('modal-name').innerText = m.username;
+
+            const isZawieszony = roles.some(r => r.id === '1466957208917905665');
+            const nagana1 = roles.some(r => r.name.toLowerCase().includes('nagana x1'));
+            const nagana2 = roles.some(r => r.name.toLowerCase().includes('nagana x2'));
+
+            let karyHTML = '';
+            if (isZawieszony) karyHTML += `<div class="w-full bg-red-600/20 border border-red-600 text-red-500 text-[10px] font-black py-2 px-4 rounded-lg mb-2 text-center uppercase tracking-widest">⚠️ ZAWIESZONY</div>`;
+            if (nagana2) karyHTML += `<div class="w-full bg-red-600 text-white text-[10px] font-black py-2 px-4 rounded-lg text-center uppercase">Nagana x2</div>`;
+            else if (nagana1) karyHTML += `<div class="w-full bg-orange-600 text-white text-[10px] font-black py-2 px-4 rounded-lg text-center uppercase">Nagana x1</div>`;
+            document.getElementById('modal-penalty').innerHTML = karyHTML;
+
+            const SZK = [
+                { id: '1361688098244657164', label: 'A.M.S' },
+                { id: '1361688091215265935', label: 'M.S.R' },
+                { id: '1424138779806924891', label: 'R.R.U' },
+                { id: '1450159857024897197', label: 'Ginekolog' },
+                { id: '1422676790358573117', label: 'Weteryniarz' },
+                { id: '1384229768353943572', label: 'Sanepid' },
+                { id: '1361688104443973813', label: 'Coroner' },
+            ];
+            const JED = [
+                { id: '1361685381405479114', label: 'T.D' },
+                { id: '1361684141984321556', label: 'MIA' },
+                { id: '1361682897190260903', label: 'High Command' }
+            ];
+
+            document.getElementById('modal-szkolenia').innerHTML = SZK.map(s => {
+                const has = roles.some(r => r.id === s.id);
+                return `<div class="p-3 rounded-xl flex items-center gap-3 border ${has ? 'bg-blue-600/10 border-blue-500/50' : 'bg-black/40 border-white/5 opacity-30'}">
+                    <div class="${has ? 'bg-green-500' : 'bg-white/10'} w-4 h-4 rounded text-[10px] flex items-center justify-center">${has ? '✓' : ''}</div>
+                    <span class="text-[10px] font-black text-white">${s.label}</span></div>`;
+            }).join('');
+
+            document.getElementById('modal-jednostki').innerHTML = JED.map(j => {
+                const has = roles.some(r => r.id === j.id);
+                return `<div class="p-4 rounded-xl flex items-center gap-4 border ${has ? 'bg-green-900/20 border-green-500/50' : 'bg-black/40 border-white/5 opacity-20'}">
+                    <div class="${has ? 'bg-green-500' : 'bg-white/5'} w-5 h-5 rounded-full flex items-center justify-center text-[10px]">${has ? '✓' : ''}</div>
+                    <span class="text-[11px] font-black text-white">${j.label}</span></div>`;
+            }).join('');
+
+            const pCount = getLevel(roles, ROLE_PROG.plus);
+            const mCount = getLevel(roles, ROLE_PROG.minus);
+
+            document.getElementById('modal-plusy').innerHTML  = [1,2,3].map(i => `<div class="w-6 h-6 rounded border ${i <= pCount ? 'bg-green-600 border-green-400' : 'bg-white/5 border-white/10'}"></div>`).join('');
+            document.getElementById('modal-minusy').innerHTML = [1,2,3].map(i => `<div class="w-6 h-6 rounded border ${i <= mCount ? 'bg-red-600 border-red-400' : 'bg-white/5 border-white/10'}"></div>`).join('');
+
+            document.getElementById('member-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('member-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Start
+        start();
+    </script>
+    <footer style="text-align: center; padding: 20px; color: gray; font-size: 0.8rem; opacity: 0.6;">
+    <p>Strona EMS Myrp &copy; 2026/2027 | Stworzono przez **smerf7110**</p>
+</footer>
+</body>
+</html>
