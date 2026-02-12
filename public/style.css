@@ -1,19 +1,94 @@
-/* =========================================
-   NOWE ELEMENTY (SIDEBAR + BLOKADA MIA)
-   Wklej to na końcu swojego pliku CSS
-   ========================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-/* --- SIDEBAR (Prawa strona) --- */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0a0a0a;
+    color: #fff;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: rgba(15, 15, 15, 0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    z-index: 50;
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    height: 100%;
+    padding: 0 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo-badge {
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 16px;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+}
+
+.logo-title {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #fff;
+}
+
+.logo-subtitle {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+}
+
+.auth-panel {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
 .sidebar-right {
     position: fixed;
     right: 0;
-    top: 0;
-    height: 100vh;
-    width: 250px;
-    /* Dopasowane do Twojego stylu glassmorphism */
-    background: rgba(10, 10, 10, 0.6); 
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    top: 70px;
+    bottom: 0;
+    width: 200px;
+    background: rgba(15, 15, 15, 0.95);
+    backdrop-filter: blur(20px);
     border-left: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
@@ -21,32 +96,35 @@
     align-items: flex-end;
     padding-right: 40px;
     z-index: 40;
-    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
 }
 
 .sidebar-item {
     font-size: 11px;
     font-weight: 900;
-    text-transform: uppercase;
     letter-spacing: 2px;
-    margin: 18px 0;
-    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
     cursor: pointer;
+    margin: 20px 0;
+    padding: 8px 0;
     transition: all 0.3s ease;
     position: relative;
 }
 
-.sidebar-item:hover, .sidebar-item.active {
-    color: #fff;
-    transform: translateX(-10px);
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+.sidebar-item:hover {
+    color: rgba(255, 255, 255, 0.7);
+    transform: translateX(-5px);
 }
 
-/* Kropka przy aktywnym elemencie sidebara */
+.sidebar-item.active {
+    color: #fff;
+    transform: translateX(-10px);
+}
+
 .sidebar-item.active::after {
     content: '';
     position: absolute;
-    right: -20px;
+    right: -30px;
     top: 50%;
     transform: translateY(-50%);
     width: 6px;
@@ -56,33 +134,660 @@
     box-shadow: 0 0 10px #dc2626;
 }
 
-/* --- MODAL ODMOWY DOSTĘPU (MIA) --- */
-#denied-overlay {
-    display: none; /* Domyślnie ukryte */
+/* ============================================
+   MAIN CONTAINER
+   ============================================ */
+.main-container {
+    margin-top: 70px;
+    margin-right: 200px;
+    padding: 40px 50px;
+    min-height: calc(100vh - 70px);
+}
+
+.content-section {
+    display: none;
+}
+
+.content-section.active {
+    display: block;
+}
+
+.section-header {
+    margin-bottom: 30px;
+}
+
+.section-title {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+.section-subtitle {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+}
+
+/* ============================================
+   SEARCH
+   ============================================ */
+.search-container {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.search-input {
+    width: 100%;
+    padding: 14px 14px 14px 45px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.search-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* ============================================
+   MEMBERS GRID
+   ============================================ */
+.members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.member-card {
+    background: rgba(25, 25, 25, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.member-card:hover {
+    background: rgba(30, 30, 30, 0.8);
+    border-color: #dc2626;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(220, 38, 38, 0.15);
+}
+
+.member-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.member-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.member-info {
+    flex: 1;
+}
+
+.member-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 3px;
+}
+
+.member-rank {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.member-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #555;
+}
+
+.member-status.online { background: #22c55e; }
+.member-status.idle { background: #f59e0b; }
+.member-status.dnd { background: #dc2626; }
+
+/* ============================================
+   LOGIN GATE
+   ============================================ */
+.login-gate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+}
+
+.login-box {
+    text-align: center;
+    padding: 60px 40px;
+    background: rgba(25, 25, 25, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    max-width: 400px;
+}
+
+.lock-icon {
+    font-size: 60px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.login-title {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.login-desc {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 30px;
+}
+
+.login-btn {
+    display: inline-block;
+    padding: 14px 30px;
+    background: #5865F2;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.login-btn:hover {
+    background: #4752C4;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(88, 101, 242, 0.3);
+}
+
+/* ============================================
+   ACTION TILES
+   ============================================ */
+.action-tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.action-tile {
+    background: rgba(25, 25, 25, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    transition: all 0.3s ease;
+}
+
+.action-tile:hover {
+    background: rgba(30, 30, 30, 0.8);
+    border-color: #dc2626;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(220, 38, 38, 0.15);
+}
+
+.tile-icon {
+    font-size: 36px;
+    opacity: 0.8;
+}
+
+.tile-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.tile-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+}
+
+/* ============================================
+   MODALS
+   ============================================ */
+.modal-overlay {
+    display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.95);
-    backdrop-filter: blur(20px);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
     z-index: 100;
     align-items: center;
     justify-content: center;
+    padding: 20px;
 }
 
-/* Styl okienka odmowy */
-#denied-overlay > div {
-    background: rgba(20, 0, 0, 0.6);
-    border: 1px solid rgba(220, 38, 38, 0.3);
-    box-shadow: 0 0 50px rgba(220, 38, 38, 0.15);
-    padding: 3rem;
-    text-align: center;
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-container {
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-wide {
+    max-width: 1000px;
+}
+
+.modal-header {
+    padding: 25px 30px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-badge {
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #6366f1;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.modal-title {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.modal-body {
+    padding: 30px;
+    max-height: calc(90vh - 180px);
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: 20px 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.modal-left, .modal-right {
+    min-height: 400px;
+}
+
+/* ============================================
+   FORMS
+   ============================================ */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 10px;
+}
+
+.form-input, .form-select, .form-textarea {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.3s ease;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.btn-primary {
+    padding: 12px 24px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background: #b91c1c;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
+}
+
+.btn-secondary {
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+/* ============================================
+   MIA MEMBERS LIST
+   ============================================ */
+.mia-members-list {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mia-member-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mia-member-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.mia-member-item.selected {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: #dc2626;
+}
+
+.mia-member-checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.mia-member-item.selected .mia-member-checkbox {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+.mia-member-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.mia-member-name {
+    font-size: 13px;
+    font-weight: 700;
+    flex: 1;
+}
+
+.mia-member-badge {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+}
+
+/* ============================================
+   SELECTED PILLS
+   ============================================ */
+.selected-pills-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+    min-height: 40px;
+}
+
+.selected-pill {
+    background: rgba(220, 38, 38, 0.2);
+    border: 1px solid #dc2626;
+    border-radius: 20px;
+    padding: 6px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.pill-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+}
+
+.pill-remove {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.pill-remove:hover {
+    opacity: 1;
+}
+
+/* ============================================
+   PREVIEW CARD
+   ============================================ */
+.preview-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 4px solid #dc2626;
     border-radius: 12px;
-    transform: scale(0.95);
-    animation: shake 0.4s ease-in-out forwards;
+    padding: 20px;
+    margin-top: 20px;
 }
 
-/* Animacja potrząśnięcia przy odmowie */
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
+.preview-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.preview-icon {
+    font-size: 28px;
+}
+
+.preview-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.preview-subtitle {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+}
+
+.preview-body {
+    padding-top: 10px;
+}
+
+.preview-label {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 8px;
+}
+
+.preview-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* ============================================
+   TOAST
+   ============================================ */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    z-index: 1000;
+    transform: translateX(400px);
+    transition: transform 0.4s ease;
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast.success {
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid #22c55e;
+    color: #22c55e;
+}
+
+.toast.error {
+    background: rgba(220, 38, 38, 0.15);
+    border: 1px solid #dc2626;
+    color: #dc2626;
+}
+
+.toast.info {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid #3b82f6;
+    color: #3b82f6;
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+.hidden {
+    display: none !important;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
