@@ -1,366 +1,586 @@
-// ============================================
-// GLOBALS
-// ============================================
-let currentUser = null;
-let allMembersData = [];
-let selectedMemberIds = [];
-let filteredMIAMembers = [];
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
+const axios = require('axios');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
-// ============================================
-// INIT
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-    start();
-    setupSidebar();
-    setupSearches();
+const app = express();
+app.set('trust proxy', 1);
+
+// Zmienne środowiskowe
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const GUILD_ID = process.env.GUILD_ID;
+const REDIRECT_URI = process.env.REDIRECT_URI;
+
+const LOG_CHANNELS = {
+    plus: '1462235422041051351',
+    minus: '1462235907041267835',
+    pochwala: '1462236205470191774',
+    upomnienie: '1464977210585649162',
+    nagana: '1462235976733692045',
+    zawieszenie: '1462235799759224853',
+    raport: '1470745817693425788',
+    urlop: '1387216856686919690',
+    wezwanie: '1393704033377587200',
+};
+
+async function sendLog(guild, channelKey, embed, ping = null) {
+    try {
+        const channel = await guild.channels.fetch(LOG_CHANNELS[channelKey]);
+        if (channel) {
+            const messageData = { embeds: [embed] };
+            if (ping) messageData.content = ping;
+            await channel.send(messageData);
+        }
+    } catch (err) {
+        console.warn(`Log error [${channelKey}]:`, err.message);
+    }
+}
+
+const medicalRanksIds = [
+    '1361688117311963216', '1361682698963259522', '1361682855645675720',
+    '1361682877062058044', '1361682883479339309', '1361685410186526932',
+    '1361685419204542689', '1388915799288320154', '1361685425072242860',
+    '1361685459243237518', '1361685464058302585', '1361685471792595245',
+    '1361686250335113463', '1361686238821744640', '1361686264302141440',
+    '1361686256999989500'
+];
+
+const ROLE_PROGRESSION = {
+    plus: ['1361688150040248370', '1361688142880440330', '1361688136429600989'],
+    minus: ['1361688178595201064', '1361688172802605218', '1361688165093736528'],
+    nagana: ['1408554798541701243', '1408554854888247466']
+};
+
+const SPECIAL_ROLES = {
+    zawieszenie: '1466957208917905665',
+    upomnienie: '1361686285529514024',
+    pochwala: '1361686292044005377',
+};
+
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'change-me-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000
+    }
+}));
+
+app.use(express.static('public'));
+app.use(express.json());
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences
+    ]
 });
 
-async function start() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const error = urlParams.get('error');
-        if (error) {
-            showToast('Błąd logowania: ' + error, 'error');
-            window.history.replaceState({}, document.title, window.location.pathname);
+let membersCache = null;
+let lastFetchTime = 0;
+let isFetching = false;
+const CACHE_DURATION = 10 * 60 * 1000;
+
+async function getEMSMembers(forceRefresh = false) {
+    const now = Date.now();
+    
+    if (!forceRefresh && membersCache && (now - lastFetchTime) < CACHE_DURATION) {
+        return membersCache;
+    }
+
+    if (isFetching) {
+        let attempts = 0;
+        while (isFetching && attempts < 50) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            attempts++;
         }
+        if (membersCache) return membersCache;
+    }
 
-        const mRes = await fetch('/api/ems-members');
-        allMembersData = await mRes.json();
-        renderFullList(allMembersData);
+    isFetching = true;
 
-        const uRes = await fetch('/api/user');
-        currentUser = await uRes.json();
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        
+        const members = await guild.members.fetch({ 
+            force: false,
+            withPresences: false
+        });
 
-        if (currentUser && currentUser.id) {
-            renderAuthPanel();
-            document.getElementById('panel-gate-locked').classList.add('hidden');
-            document.getElementById('panel-gate-unlocked').classList.remove('hidden');
+        const filteredMembers = members.filter(m => 
+            m.roles.cache.some(r => medicalRanksIds.includes(r.id))
+        );
 
-            if (currentUser.isZarzad || currentUser.isMIA) {
-                document.getElementById('admin-action-tile').classList.remove('hidden');
+        const data = filteredMembers.map(m => ({
+            id: m.id,
+            username: m.displayName,
+            avatar: m.user.displayAvatarURL({ dynamic: true, size: 256 }),
+            status: 'offline',
+            rank: m.roles.cache.find(r => r.name.includes('⁝'))?.name || m.roles.highest.name,
+            allRoles: m.roles.cache.map(r => ({ id: r.id, name: r.name }))
+        }));
+
+        membersCache = data;
+        lastFetchTime = now;
+        isFetching = false;
+        
+        return data;
+    } catch (e) {
+        isFetching = false;
+        
+        if (membersCache) {
+            return membersCache;
+        }
+        
+        throw e;
+    }
+}
+
+client.login(BOT_TOKEN);
+
+client.on('ready', async () => {
+    console.log(`✅ Bot: ${client.user.tag}`);
+    
+    setTimeout(async () => {
+        try {
+            await getEMSMembers(true);
+            console.log('✅ Cache ready');
+        } catch (e) {
+            console.error('⚠️ Cache error:', e.message);
+        }
+    }, 5000);
+});
+
+app.get('/api/ems-members', async (req, res) => {
+    try {
+        const data = await getEMSMembers();
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/mia-action', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Not logged in' });
+    }
+
+    const { targetIds, type, reason } = req.body;
+
+    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0 || !type || !reason) {
+        return res.status(400).json({ error: 'Missing data' });
+    }
+
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const now = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });
+        const adminMention = `<@${req.session.user.id}>`;
+
+        let successCount = 0;
+        let errors = [];
+
+        for (const targetId of targetIds) {
+            try {
+                const member = await guild.members.fetch(targetId);
+
+                if (!member) {
+                    errors.push(`Not found: ${targetId}`);
+                    continue;
+                }
+
+                const currentRoles = member.roles.cache;
+                const targetMention = `<@${targetId}>`;
+                let actionDescription = '';
+
+                if (type === 'wezwanie') {
+                    const embed = new EmbedBuilder()
+                        .setColor(0xf59e0b)
+                        .setTitle('📢 Wezwanie do Biura')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+
+                    await sendLog(guild, 'wezwanie', embed, targetMention);
+                    successCount++;
+                    continue;
+                }
+
+                if (type === 'plus') {
+                    const progression = ROLE_PROGRESSION.plus;
+                    let currentLevel = -1;
+                    for (let i = progression.length - 1; i >= 0; i--) {
+                        if (currentRoles.has(progression[i])) {
+                            currentLevel = i;
+                            break;
+                        }
+                    }
+
+                    if (currentLevel >= progression.length - 1) {
+                        errors.push(`${member.displayName} - max+`);
+                        continue;
+                    }
+
+                    const nextRole = progression[currentLevel + 1];
+                    for (const roleId of progression) {
+                        if (currentRoles.has(roleId)) await member.roles.remove(roleId);
+                    }
+                    await member.roles.add(nextRole);
+                    actionDescription = `Plus x${currentLevel + 2}`;
+                }
+
+                else if (type === 'minus') {
+                    const progression = ROLE_PROGRESSION.minus;
+                    let currentLevel = -1;
+                    for (let i = progression.length - 1; i >= 0; i--) {
+                        if (currentRoles.has(progression[i])) {
+                            currentLevel = i;
+                            break;
+                        }
+                    }
+
+                    if (currentLevel >= progression.length - 1) {
+                        errors.push(`${member.displayName} - max-`);
+                        continue;
+                    }
+
+                    const nextRole = progression[currentLevel + 1];
+                    for (const roleId of progression) {
+                        if (currentRoles.has(roleId)) await member.roles.remove(roleId);
+                    }
+                    await member.roles.add(nextRole);
+                    actionDescription = `Minus x${currentLevel + 2}`;
+                }
+
+                else if (type === 'nagana') {
+                    const progression = ROLE_PROGRESSION.nagana;
+                    let currentLevel = -1;
+                    for (let i = progression.length - 1; i >= 0; i--) {
+                        if (currentRoles.has(progression[i])) {
+                            currentLevel = i;
+                            break;
+                        }
+                    }
+
+                    if (currentLevel >= progression.length - 1) {
+                        errors.push(`${member.displayName} - max nagana`);
+                        continue;
+                    }
+
+                    const nextRole = progression[currentLevel + 1];
+                    for (const roleId of progression) {
+                        if (currentRoles.has(roleId)) await member.roles.remove(roleId);
+                    }
+                    await member.roles.add(nextRole);
+                    actionDescription = `Nagana x${currentLevel + 2}`;
+                }
+
+                else if (type === 'upomnienie') {
+                    const roleId = SPECIAL_ROLES.upomnienie;
+                    if (!currentRoles.has(roleId)) {
+                        await member.roles.add(roleId);
+                    }
+                    actionDescription = 'Upomnienie';
+                }
+
+                else if (type === 'zawieszenie') {
+                    const roleId = SPECIAL_ROLES.zawieszenie;
+                    await member.roles.add(roleId);
+                    actionDescription = 'Zawieszenie';
+                }
+
+                else if (type === 'pochwala') {
+                    const roleId = SPECIAL_ROLES.pochwala;
+                    if (!currentRoles.has(roleId)) {
+                        await member.roles.add(roleId);
+                    }
+                    actionDescription = 'Pochwała';
+                }
+
+                let logEmbed;
+
+                if (type === 'plus') {
+                    logEmbed = new EmbedBuilder()
+                        .setColor(0x22c55e)
+                        .setTitle('✅ Plus')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '📊', value: actionDescription, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+                } else if (type === 'minus') {
+                    logEmbed = new EmbedBuilder()
+                        .setColor(0xdc2626)
+                        .setTitle('❌ Minus')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '📊', value: actionDescription, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+                } else if (type === 'pochwala') {
+                    logEmbed = new EmbedBuilder()
+                        .setColor(0x06b6d4)
+                        .setTitle('🏅 Pochwała')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+                } else if (type === 'upomnienie') {
+                    logEmbed = new EmbedBuilder()
+                        .setColor(0xf59e0b)
+                        .setTitle('⚠️ Upomnienie')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+                } else if (type === 'nagana') {
+                    logEmbed = new EmbedBuilder()
+                        .setColor(0xea580c)
+                        .setTitle('🔴 Nagana')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '📊', value: actionDescription, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+                } else if (type === 'zawieszenie') {
+                    logEmbed = new EmbedBuilder()
+                        .setColor(0x7f1d1d)
+                        .setTitle('🚫 Zawieszenie')
+                        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                        .addFields(
+                            { name: '👤', value: `${targetMention}\n${member.displayName}`, inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '\u200B', value: '\u200B', inline: true },
+                            { name: '📝', value: reason },
+                            { name: '🔰', value: adminMention, inline: true },
+                            { name: '🕐', value: now, inline: true }
+                        )
+                        .setFooter({ text: 'MIA EMS' })
+                        .setTimestamp();
+                }
+
+                if (logEmbed) {
+                    await sendLog(guild, type, logEmbed);
+                }
+
+                successCount++;
+
+            } catch (err) {
+                errors.push(`${targetId}: ${err.message}`);
             }
-        } else {
-            document.getElementById('auth-panel').innerHTML = `
-                <a href="/login" class="login-btn">ZALOGUJ PRZEZ DISCORD</a>
-            `;
         }
-    } catch (e) {
-        console.error("Init error:", e);
-        showToast('Błąd ładowania danych', 'error');
-    }
-}
 
-// ============================================
-// SIDEBAR
-// ============================================
-function setupSidebar() {
-    const items = document.querySelectorAll('.sidebar-item');
-    items.forEach(item => {
-        item.addEventListener('click', () => {
-            const section = item.getAttribute('data-section');
+        if (successCount > 0) {
+            res.json({ 
+                success: true, 
+                message: `OK: ${successCount}`,
+                successCount,
+                errors: errors.length > 0 ? errors : null
+            });
+        } else {
+            res.status(400).json({ 
+                error: 'Failed',
+                errors 
+            });
+        }
+
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/send-report', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+    const { type, description } = req.body;
+    if (!description) return res.status(400).json({ error: 'No description' });
+
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const now = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });
+
+        const typeColors = {
+            'Patrol': 0x3b82f6,
+            'Operacja': 0xec4899,
+            'Wezwanie': 0xf59e0b,
+            'Zabezpieczenie': 0x10b981,
+        };
+        const typeEmoji = {
+            'Patrol': '🚑',
+            'Operacja': '🔬',
+            'Wezwanie': '🚨',
+            'Zabezpieczenie': '🛡️',
+        };
+
+        const embed = new EmbedBuilder()
+            .setColor(typeColors[type] || 0x3b82f6)
+            .setTitle(`${typeEmoji[type] || '📝'} Raport — ${type}`)
+            .addFields(
+                { name: '👤', value: `<@${req.session.user.id}>`, inline: true },
+                { name: '🏷️', value: type, inline: true },
+                { name: '\u200B', value: '\u200B', inline: true },
+                { name: '📋', value: description },
+                { name: '🕐', value: now, inline: true }
+            )
+            .setFooter({ text: 'MIA EMS' })
+            .setTimestamp();
+
+        await sendLog(guild, 'raport', embed);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/holiday', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+
+    const { endDate, reason } = req.body;
+
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const now = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle('📅 Urlop')
+            .addFields(
+                { name: '👤', value: `<@${req.session.user.id}>`, inline: true },
+                { name: '📅', value: endDate || 'N/A', inline: true },
+                { name: '\u200B', value: '\u200B', inline: true },
+                { name: '💬', value: reason || 'N/A' },
+                { name: '🕐', value: now, inline: true }
+            )
+            .setFooter({ text: 'MIA EMS' })
+            .setTimestamp();
+
+        await sendLog(guild, 'urlop', embed);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/login', (req, res) => {
+    const url = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify%20guilds.members.read`;
+    res.redirect(url);
+});
+
+app.get('/auth/discord/callback', async (req, res) => {
+    const code = req.query.code;
+    
+    if (!code) {
+        return res.redirect('/?error=no_code');
+    }
+
+    try {
+        const response = await axios.post('https://discord.com/api/oauth2/token', 
+            new URLSearchParams({
+                client_id: CLIENT_ID, 
+                client_secret: CLIENT_SECRET, 
+                code,
+                grant_type: 'authorization_code', 
+                redirect_uri: REDIRECT_URI
+            }),
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+
+        const userRes = await axios.get('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${response.data.access_token}` }
+        });
+
+        try {
+            const guild = await client.guilds.fetch(GUILD_ID);
+            const member = await guild.members.fetch(userRes.data.id);
+            userRes.data.allRoles = member.roles.cache.map(r => ({ id: r.id, name: r.name }));
+
+            const HIGH_COMMAND_ROLE_ID = '1361682897190260903';
+            const MIA_ROLE_ID = '1361684141984321556';
+            userRes.data.isZarzad = member.roles.cache.has(HIGH_COMMAND_ROLE_ID);
+            userRes.data.isMIA = member.roles.cache.has(MIA_ROLE_ID);
+        } catch (roleErr) {
+            userRes.data.allRoles = [];
+            userRes.data.isZarzad = false;
+            userRes.data.isMIA = false;
+        }
+
+        req.session.user = userRes.data;
+        
+        req.session.save((err) => {
+            if (err) {
+                return res.redirect('/?error=session');
+            }
             
-            items.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
-
-            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(`section-${section}`).classList.add('active');
+            setTimeout(() => {
+                res.redirect('/');
+            }, 100);
         });
+        
+    } catch (e) {
+        res.redirect('/?error=auth');
+    }
+});
+
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.clearCookie('connect.sid');
+        res.redirect('/');
     });
-}
+});
 
-// ============================================
-// SEARCH
-// ============================================
-function setupSearches() {
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const filtered = allMembersData.filter(m => 
-                m.username.toLowerCase().includes(query)
-            );
-            renderFullList(filtered);
-        });
-    }
+app.get('/api/user', (req, res) => res.json(req.session.user || null));
 
-    const miaSearch = document.getElementById('mia-search');
-    if (miaSearch) {
-        miaSearch.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            filteredMIAMembers = allMembersData.filter(m => 
-                m.username.toLowerCase().includes(query)
-            );
-            renderMIAMembersList();
-        });
-    }
-}
-
-// ============================================
-// RENDER MEMBERS
-// ============================================
-function renderFullList(members) {
-    const grid = document.getElementById('members-grid');
-    if (!grid) return;
-
-    grid.innerHTML = members.map(m => `
-        <div class="member-card">
-            <div class="member-header">
-                <img src="${m.avatar}" alt="${m.username}" class="member-avatar">
-                <div class="member-info">
-                    <div class="member-name">${m.username}</div>
-                    <div class="member-rank">${m.rank || 'Brak rangi'}</div>
-                </div>
-                <div class="member-status ${m.status}"></div>
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderAuthPanel() {
-    const panel = document.getElementById('auth-panel');
-    if (!panel || !currentUser) return;
-
-    panel.innerHTML = `
-        <div style="display:flex;align-items:center;gap:12px;">
-            <img src="${currentUser.avatar}" alt="${currentUser.username}" 
-                 style="width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,0.1);">
-            <div>
-                <div style="font-size:13px;font-weight:700;">${currentUser.username}</div>
-                <a href="/logout" style="font-size:11px;color:rgba(255,255,255,0.4);text-decoration:none;font-weight:600;">Wyloguj</a>
-            </div>
-        </div>
-    `;
-}
-
-// ============================================
-// MODALS - RAPORT
-// ============================================
-function openReportModal() {
-    document.getElementById('report-modal').classList.add('active');
-}
-
-function closeReportModal() {
-    document.getElementById('report-modal').classList.remove('active');
-}
-
-async function submitReport() {
-    const type = document.getElementById('report-type').value;
-    const description = document.getElementById('report-desc').value;
-
-    if (!description.trim()) {
-        showToast('Wypełnij opis!', 'error');
-        return;
-    }
-
-    try {
-        const res = await fetch('/api/send-report', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, description })
-        });
-
-        if (res.ok) {
-            showToast('Raport wysłany!', 'success');
-            closeReportModal();
-            document.getElementById('report-desc').value = '';
-        } else {
-            throw new Error('Failed');
-        }
-    } catch (e) {
-        showToast('Błąd wysyłania', 'error');
-    }
-}
-
-// ============================================
-// MODALS - URLOP
-// ============================================
-function openHolidayModal() {
-    document.getElementById('holiday-modal').classList.add('active');
-}
-
-function closeHolidayModal() {
-    document.getElementById('holiday-modal').classList.remove('active');
-}
-
-async function submitHoliday() {
-    const endDate = document.getElementById('holiday-date').value;
-    const reason = document.getElementById('holiday-reason').value;
-
-    if (!endDate) {
-        showToast('Wybierz datę!', 'error');
-        return;
-    }
-
-    try {
-        const res = await fetch('/api/holiday', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ endDate, reason })
-        });
-
-        if (res.ok) {
-            showToast('Urlop zgłoszony!', 'success');
-            closeHolidayModal();
-            document.getElementById('holiday-date').value = '';
-            document.getElementById('holiday-reason').value = '';
-        } else {
-            throw new Error('Failed');
-        }
-    } catch (e) {
-        showToast('Błąd zgłoszenia', 'error');
-    }
-}
-
-// ============================================
-// MODALS - MIA
-// ============================================
-function openMIAModal() {
-    document.getElementById('mia-modal').classList.add('active');
-    selectedMemberIds = [];
-    filteredMIAMembers = [...allMembersData];
-    renderMIAMembersList();
-    renderSelectedPills();
-    updatePreview();
-}
-
-function closeMIAModal() {
-    document.getElementById('mia-modal').classList.remove('active');
-    selectedMemberIds = [];
-    document.getElementById('mia-reason').value = '';
-}
-
-function renderMIAMembersList() {
-    const list = document.getElementById('mia-members-list');
-    if (!list) return;
-
-    list.innerHTML = filteredMIAMembers.map(m => `
-        <div class="mia-member-item ${selectedMemberIds.includes(m.id) ? 'selected' : ''}" 
-             onclick="toggleMember('${m.id}')">
-            <div class="mia-member-checkbox"></div>
-            <img src="${m.avatar}" alt="${m.username}" class="mia-member-avatar">
-            <div class="mia-member-name">${m.username}</div>
-            <div class="mia-member-badge">${m.rank || 'Brak'}</div>
-        </div>
-    `).join('');
-}
-
-function toggleMember(id) {
-    if (selectedMemberIds.includes(id)) {
-        selectedMemberIds = selectedMemberIds.filter(i => i !== id);
-    } else {
-        selectedMemberIds.push(id);
-    }
-    renderMIAMembersList();
-    renderSelectedPills();
-    updatePreview();
-}
-
-function renderSelectedPills() {
-    const container = document.getElementById('selected-members-container');
-    if (!container) return;
-
-    if (selectedMemberIds.length === 0) {
-        container.innerHTML = '<div style="color:rgba(255,255,255,0.3);font-size:12px;padding:10px 0;">Nie wybrano nikogo</div>';
-        return;
-    }
-
-    container.innerHTML = selectedMemberIds.map(id => {
-        const member = allMembersData.find(m => m.id === id);
-        if (!member) return '';
-        return `
-            <div class="selected-pill">
-                <img src="${member.avatar}" alt="${member.username}" class="pill-avatar">
-                <span>${member.username}</span>
-                <span class="pill-remove" onclick="event.stopPropagation();toggleMember('${id}')">✕</span>
-            </div>
-        `;
-    }).join('');
-}
-
-function onActionTypeChange() {
-    updatePreview();
-}
-
-function updatePreview() {
-    const type = document.getElementById('mia-action-type').value;
-    const reason = document.getElementById('mia-reason').value;
-
-    const icons = {
-        plus: '✅',
-        minus: '❌',
-        pochwala: '🏅',
-        upomnienie: '⚠️',
-        nagana: '🔴',
-        zawieszenie: '🚫',
-        wezwanie: '📢'
-    };
-
-    const labels = {
-        plus: 'Plus',
-        minus: 'Minus',
-        pochwala: 'Pochwała',
-        upomnienie: 'Upomnienie',
-        nagana: 'Nagana',
-        zawieszenie: 'Zawieszenie',
-        wezwanie: 'Wezwanie'
-    };
-
-    document.querySelector('.preview-icon').textContent = icons[type] || '✅';
-    document.querySelector('.preview-title').textContent = labels[type] || 'Akcja';
-    document.getElementById('preview-count').textContent = selectedMemberIds.length;
-    document.getElementById('preview-reason').textContent = reason || '-';
-}
-
-document.getElementById('mia-reason')?.addEventListener('input', updatePreview);
-
-async function submitMIAAction() {
-    if (selectedMemberIds.length === 0) {
-        showToast('Wybierz przynajmniej jednego członka!', 'error');
-        return;
-    }
-
-    const type = document.getElementById('mia-action-type').value;
-    const reason = document.getElementById('mia-reason').value;
-
-    if (!reason.trim()) {
-        showToast('Podaj powód akcji!', 'error');
-        return;
-    }
-
-    try {
-        const res = await fetch('/api/mia-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                targetIds: selectedMemberIds,
-                type,
-                reason
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            showToast(data.message || 'Akcja wykonana!', 'success');
-            closeMIAModal();
-        } else {
-            showToast(data.error || 'Błąd akcji', 'error');
-        }
-    } catch (e) {
-        showToast('Błąd połączenia', 'error');
-    }
-}
-
-// ============================================
-// TOAST
-// ============================================
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = `toast ${type}`;
-    toast.classList.add('show');
-
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 3000);
-}
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🚀 Server on port ${PORT}`);
+});
