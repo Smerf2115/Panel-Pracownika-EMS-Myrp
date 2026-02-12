@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIA EMS | Panel Zarządzania</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-badge">MIA</div>
+                <div>
+                    <h1 class="logo-title">MEDICAL INTELLIGENCE AGENCY</h1>
+                    <p class="logo-subtitle">EMERGENCY MEDICAL SERVICES</p>
+                </div>
+            </div>
+            <div id="auth-panel" class="auth-panel"></div>
+        </div>
+    </header>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar-right">
+        <div class="sidebar-item active" data-section="structure">GŁÓWNA</div>
+        <div class="sidebar-item" data-section="panel">PANEL PRACOWNIKA</div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main-container">
+        
+        <!-- STRUKTURA -->
+        <section id="section-structure" class="content-section active">
+            <div class="section-header">
+                <h2 class="section-title">🏥 STRUKTURA ORGANIZACYJNA</h2>
+                <p class="section-subtitle">Pełna lista personelu medycznego</p>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <input type="text" id="search-input" class="search-input" placeholder="Szukaj funkcjonariusza...">
+            </div>
+
+            <div id="members-grid" class="members-grid"></div>
+        </section>
+
+        <!-- PANEL PRACOWNIKA -->
+        <section id="section-panel" class="content-section">
+            <div id="panel-gate-locked" class="login-gate">
+                <div class="login-box">
+                    <div class="lock-icon">🔒</div>
+                    <h3 class="login-title">WYMAGANE LOGOWANIE</h3>
+                    <p class="login-desc">Musisz się zalogować przez Discord</p>
+                    <a href="/login" class="login-btn">ZALOGUJ PRZEZ DISCORD</a>
+                </div>
+            </div>
+
+            <div id="panel-gate-unlocked" class="hidden">
+                <div class="section-header">
+                    <h2 class="section-title">⚡ PANEL PRACOWNIKA</h2>
+                    <p class="section-subtitle">Narzędzia zarządzania</p>
+                </div>
+
+                <div class="action-tiles-grid">
+                    <div class="action-tile" onclick="openReportModal()">
+                        <div class="tile-icon">📋</div>
+                        <div>
+                            <h3 class="tile-title">Raport Operacyjny</h3>
+                            <p class="tile-desc">Złóż raport ze służby</p>
+                        </div>
+                    </div>
+
+                    <div class="action-tile" onclick="openHolidayModal()">
+                        <div class="tile-icon">🏖️</div>
+                        <div>
+                            <h3 class="tile-title">Zgłoszenie Urlopu</h3>
+                            <p class="tile-desc">Zaplanuj nieobecność</p>
+                        </div>
+                    </div>
+
+                    <div id="admin-action-tile" class="action-tile hidden" onclick="openMIAModal()">
+                        <div class="tile-icon">🎯</div>
+                        <div>
+                            <h3 class="tile-title">Panel MIA</h3>
+                            <p class="tile-desc">Akcje dyscyplinarne</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODALS -->
+    <!-- Raport -->
+    <div id="report-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">📋 RAPORT OPERACYJNY</h3>
+                <button onclick="closeReportModal()" class="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">TYP OPERACJI</label>
+                    <select id="report-type" class="form-select">
+                        <option value="Patrol">🚑 Patrol</option>
+                        <option value="Operacja">🔬 Operacja</option>
+                        <option value="Wezwanie">🚨 Wezwanie</option>
+                        <option value="Zabezpieczenie">🛡️ Zabezpieczenie</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">PRZEBIEG SŁUŻBY</label>
+                    <textarea id="report-desc" class="form-textarea" rows="6" placeholder="Opisz..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeReportModal()" class="btn-secondary">Anuluj</button>
+                <button onclick="submitReport()" class="btn-primary">Wyślij</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Urlop -->
+    <div id="holiday-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">🏖️ ZGŁOSZENIE URLOPU</h3>
+                <button onclick="closeHolidayModal()" class="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">URLOP DO</label>
+                    <input type="date" id="holiday-date" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">POWÓD</label>
+                    <textarea id="holiday-reason" class="form-textarea" rows="4" placeholder="Opcjonalnie..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeHolidayModal()" class="btn-secondary">Anuluj</button>
+                <button onclick="submitHoliday()" class="btn-primary">Zgłoś</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MIA Modal -->
+    <div id="mia-modal" class="modal-overlay">
+        <div class="modal-container modal-wide">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-badge">MIA DIVISION</div>
+                    <h3 class="modal-title">AKCJE DYSCYPLINARNE</h3>
+                </div>
+                <button onclick="closeMIAModal()" class="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-grid">
+                    <div class="modal-left">
+                        <div class="form-group">
+                            <label class="form-label">WYBIERZ FUNKCJONARIUSZA</label>
+                            <div class="search-container">
+                                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                <input type="text" id="mia-search" class="search-input" placeholder="Szukaj...">
+                            </div>
+                        </div>
+
+                        <div id="selected-members-container" class="selected-pills-container"></div>
+                        <div id="mia-members-list" class="mia-members-list"></div>
+                    </div>
+
+                    <div class="modal-right">
+                        <div class="form-group">
+                            <label class="form-label">TYP AKCJI</label>
+                            <select id="mia-action-type" onchange="onActionTypeChange()" class="form-select">
+                                <option value="plus">✅ Plus</option>
+                                <option value="minus">❌ Minus</option>
+                                <option value="pochwala">🏅 Pochwała</option>
+                                <option value="upomnienie">⚠️ Upomnienie</option>
+                                <option value="nagana">🔴 Nagana</option>
+                                <option value="zawieszenie">🚫 Zawieszenie</option>
+                                <option value="wezwanie">📢 Wezwanie</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">POWÓD</label>
+                            <textarea id="mia-reason" class="form-textarea" rows="5" placeholder="Opisz powód..."></textarea>
+                        </div>
+
+                        <div id="mia-preview-card" class="preview-card">
+                            <div class="preview-header">
+                                <div class="preview-icon">✅</div>
+                                <div>
+                                    <div class="preview-title">Plus</div>
+                                    <div class="preview-subtitle">Dla <span id="preview-count">0</span> osób</div>
+                                </div>
+                            </div>
+                            <div class="preview-body">
+                                <div class="preview-label">Powód:</div>
+                                <div id="preview-reason" class="preview-text">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeMIAModal()" class="btn-secondary">Anuluj</button>
+                <button onclick="submitMIAAction()" class="btn-primary">Wykonaj</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
